@@ -319,8 +319,8 @@ contract TomoTokenSale is Pausable {
   uint256 public constant fundingEndTime = 1520136000; // 2018/03/04 04:00:00
   uint256 public constant minContribution = 0.1 ether;
   uint256 public constant maxContribution = 10 ether;
-  uint256 public constant tokenExchangeRate = 4000;
-  uint256 public maxCap = maxContribution.mul(tokenExchangeRate);
+  uint256 public constant tokenExchangeRate = 3200;
+  uint256 public constant maxCap = tokenExchangeRate * maxContribution;
 
   bool public isFinalized;
 
