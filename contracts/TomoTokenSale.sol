@@ -173,43 +173,6 @@ contract StandardToken is ERC20 {
   function allowance(address _owner, address _spender) public view returns (uint256) {
     return allowed[_owner][_spender];
   }
-
-  /**
-   * @dev Increase the amount of tokens that an owner allowed to a spender.
-   *
-   * approve should be called when allowed[_spender] == 0. To increment
-   * allowed value is better to use this function to avoid 2 calls (and wait until
-   * the first transaction is mined)
-   * From MonolithDAO Token.sol
-   * @param _spender The address which will spend the funds.
-   * @param _addedValue The amount of tokens to increase the allowance by.
-   */
-  function increaseApproval(address _spender, uint _addedValue) public returns (bool) {
-    allowed[msg.sender][_spender] = allowed[msg.sender][_spender].add(_addedValue);
-    Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
-    return true;
-  }
-
-  /**
-   * @dev Decrease the amount of tokens that an owner allowed to a spender.
-   *
-   * approve should be called when allowed[_spender] == 0. To decrement
-   * allowed value is better to use this function to avoid 2 calls (and wait until
-   * the first transaction is mined)
-   * From MonolithDAO Token.sol
-   * @param _spender The address which will spend the funds.
-   * @param _subtractedValue The amount of tokens to decrease the allowance by.
-   */
-  function decreaseApproval(address _spender, uint _subtractedValue) public returns (bool) {
-    uint oldValue = allowed[msg.sender][_spender];
-    if (_subtractedValue > oldValue) {
-      allowed[msg.sender][_spender] = 0;
-    } else {
-      allowed[msg.sender][_spender] = oldValue.sub(_subtractedValue);
-    }
-    Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
-    return true;
-  }
 }
 // ================= Standard Token Contract end ========================
 
@@ -279,15 +242,15 @@ contract TomoCoin is StandardToken, Pausable {
     totalSupply_ = tomoDeposit;
   }
 
-  function transfer(address _to, uint _value) public whenNotPaused returns (bool success) {
+  function transfer(address _to, uint256 _value) public whenNotPaused returns (bool success) {
     return super.transfer(_to,_value);
   }
 
-  function approve(address _spender, uint _value) public whenNotPaused returns (bool success) {
-    return super.approve(_spender,_value);
+  function approve(address _spender, uint256 _value) public whenNotPaused returns (bool success) {
+    return super.approve(_spender, _value);
   }
 
-  function balanceOf(address _owner) public view returns (uint balance) {
+  function balanceOf(address _owner) public view returns (uint256 balance) {
     return super.balanceOf(_owner);
   }
 
@@ -298,7 +261,7 @@ contract TomoCoin is StandardToken, Pausable {
     }
   }
 
-  function mint(address _recipient, uint _value) public whenNotPaused returns (bool success) {
+  function mint(address _recipient, uint256 _value) public whenNotPaused returns (bool success) {
       require(_value > 0);
       // This function is only called by Token Sale Smart Contract
       require(msg.sender == tokenSaleAddress);
@@ -315,11 +278,11 @@ contract TomoCoin is StandardToken, Pausable {
 
 // ================= Whitelist start ====================
 contract TomoContributorWhitelist is Ownable {
-    mapping(address=>uint256) public whitelist;
+    mapping(address => uint256) public whitelist;
 
     function TomoContributorWhitelist() public {}
 
-    event ListAddress( address _user, uint256 cap, uint _time );
+    event ListAddress( address _user, uint256 cap, uint256 _time );
 
     function listAddress( address _user, uint256 cap ) public onlyOwner {
         whitelist[_user] = cap;
@@ -342,20 +305,22 @@ contract TomoContributorWhitelist is Ownable {
 contract TomoTokenSale is Pausable {
   using SafeMath for uint256;
 
-  TomoCoin public token;
+  TomoCoin tomo;
   TomoContributorWhitelist whitelist;
+  mapping(address => uint256) public participated;
 
   address public ethFundDepositAddress;
   address public tomoDepositAddress;
 
-  uint256 public tokenCreationCap = 4000000 * 10**18;
-  uint256 public totalSupply;
-  uint256 public fundingStartTime = 1504051200; // 2017-08-30
-  uint256 public fundingPoCEndTime = 1519948800; //1518480000; // 2018-02-13
-  uint256 public fundingEndTime = 1530316800; //1518652800; // 2018-02-15
-  uint256 public minContribution = 0.1 ether;
-  uint256 public maxContribution = 10 ether;
-  uint256 public tokenExchangeRate = 4000;
+  uint256 public constant tokenCreationCap = 4000000 * 10**18;
+  uint256 public totalTokenSold = 0;
+  uint256 public constant fundingStartTime = 1519876800; // 2018/03/01 04:00:00
+  uint256 public constant fundingPoCEndTime = 1519963200; // 2018/03/02 04:00:00
+  uint256 public constant fundingEndTime = 1520136000; // 2018/03/04 04:00:00
+  uint256 public constant minContribution = 0.1 ether;
+  uint256 public constant maxContribution = 10 ether;
+  uint256 public constant tokenExchangeRate = 3200;
+  uint256 public constant maxCap = tokenExchangeRate * maxContribution;
 
   bool public isFinalized;
 
@@ -369,7 +334,7 @@ contract TomoTokenSale is Pausable {
     address _tomoDepositAddress
   ) public
   {
-    token = TomoCoin(_tomoCoinAddress);
+    tomo = TomoCoin(_tomoCoinAddress);
     whitelist = TomoContributorWhitelist(_tomoContributorWhitelistAddress);
     ethFundDepositAddress = _ethFundDepositAddress;
     tomoDepositAddress = _tomoDepositAddress;
@@ -379,7 +344,7 @@ contract TomoTokenSale is Pausable {
 
   function buy(address to, uint256 val) internal returns (bool success) {
     MintTomo(tomoDepositAddress, to, val);
-    return token.mint(to, val);
+    return tomo.mint(to, val);
   }
 
   function () public payable {    
@@ -395,8 +360,7 @@ contract TomoTokenSale is Pausable {
 
     uint256 tokens = _value.mul(tokenExchangeRate);
 
-    uint256 maxCap = maxContribution.mul(tokenExchangeRate);
-    uint256 cap = whitelist.getCap(msg.sender);
+    uint256 cap = whitelist.getCap(_beneficiary);
     require (cap > 0);
 
     uint256 tokensToAllocate = 0;
@@ -405,32 +369,36 @@ contract TomoTokenSale is Pausable {
 
     // running while PoC Buying Time
     if (now <= fundingPoCEndTime) {
-      tokensToAllocate = cap.sub(token.balanceOf(msg.sender));
+      tokensToAllocate = cap.sub(participated[_beneficiary]);
     } else {
-      tokensToAllocate = maxCap.sub(token.balanceOf(msg.sender));
+      tokensToAllocate = maxCap.sub(participated[_beneficiary]);
     }
 
     // calculate refund if over max cap or individual cap
     if (tokens > tokensToAllocate) {
       tokensToRefund = tokens.sub(tokensToAllocate);
-      etherToRefund = tokensToRefund / tokenExchangeRate;
+      etherToRefund = tokensToRefund.div(tokenExchangeRate);
     } else {
       // user can buy amount they want
       tokensToAllocate = tokens;
     }
 
-    uint256 checkedSupply = totalSupply.add(tokensToAllocate);
+    uint256 checkedTokenSold = totalTokenSold.add(tokensToAllocate);
 
     // if reaches hard cap
-    if (tokenCreationCap < checkedSupply) {        
-      tokensToAllocate = tokenCreationCap.sub(totalSupply);
+    if (tokenCreationCap < checkedTokenSold) {
+      tokensToAllocate = tokenCreationCap.sub(totalTokenSold);
       tokensToRefund   = tokens.sub(tokensToAllocate);
-      etherToRefund = tokensToRefund / tokenExchangeRate;
-      totalSupply = tokenCreationCap;
+      etherToRefund = tokensToRefund.div(tokenExchangeRate);
+      totalTokenSold = tokenCreationCap;
     } else {
-      totalSupply = checkedSupply;
+      totalTokenSold = checkedTokenSold;
     }
 
+    // save to participated data
+    participated[_beneficiary] = participated[_beneficiary].add(tokensToAllocate);
+
+    // allocate tokens
     require(buy(_beneficiary, tokensToAllocate));
     if (etherToRefund > 0) {
       // refund in case user buy over hard cap, individual cap
